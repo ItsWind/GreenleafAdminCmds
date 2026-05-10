@@ -1,0 +1,14 @@
+{
+    "$schema": "https://moddbcdn.vintagestory.at/schema/modinfo.latest.json",
+    "type": "Code",
+    "modid": "greenleafadmincmds",
+    "name": "GreenleafAdminCmds",
+    "authors": [
+        "Windwhistle"
+    ],
+    "description": "Provides more admin commands.",
+    "version": "1.0.0",
+    "side": "Server",
+    "requiredOnClient": false,
+    "requiredOnServer": true
+}
