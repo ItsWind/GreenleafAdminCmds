@@ -7,7 +7,9 @@ using System.Text;
 using System.Threading.Tasks;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
+using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
+using Vintagestory.GameContent;
 
 namespace GreenleafAdminCmds.Patches;
 
@@ -21,6 +23,17 @@ public class TpCmdPatch {
 
     [HarmonyPrefix]
     public static void Prefix(Entity e) {
+        if (e is EntityPlayer player && player.Player.HasPrivilege(Privilege.tp))
+            Main.SavedTPBackPositions[player.PlayerUID] = player.Pos.XYZ.Clone();
+    }
+}
+
+[HarmonyPatch(typeof(GenStoryStructures), "OnTpStoryLoc")]
+public class TpStoryLocPatch {
+    [HarmonyPrefix]
+    public static void Prefix(TextCommandCallingArgs args) {
+        Entity e = args.Caller.Entity;
+
         if (e is EntityPlayer player && player.Player.HasPrivilege(Privilege.tp))
             Main.SavedTPBackPositions[player.PlayerUID] = player.Pos.XYZ.Clone();
     }

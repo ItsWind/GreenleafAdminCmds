@@ -1,12 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using HarmonyLib;
+using System;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Vintagestory.API.Common;
 using Vintagestory.API.Common.Entities;
 using Vintagestory.API.Server;
 using Vintagestory.GameContent;
+using Vintagestory.Server;
 
 namespace GreenleafAdminCmds;
 
@@ -15,6 +14,7 @@ public class Commands {
         Main.API.RegisterCommand("tpback", "Teleports you back to where you were before initiating a successful /tp command.", "", new ServerChatCommandDelegate(this.OnTPBackCommand), Privilege.tp);
         Main.API.RegisterCommand("tpentityid", "Teleports an entity by ID to your position.", "-e ENTITYID", new ServerChatCommandDelegate(this.OnTPEntityID), Privilege.tp);
         Main.API.RegisterCommand("tagboatcreator", "Tags a boat as being created by a certain player's username.", "-p USERNAME", new ServerChatCommandDelegate(this.OnTagBoatCreator), Privilege.ban);
+        Main.API.RegisterCommand("forcegroupplayerasop", "Forces a group to accept a player within the group to be OP.", "-p USERNAME -g GROUPNAME", new ServerChatCommandDelegate(this.OnForceGroupPlayerAsOP), Privilege.controlserver);
     }
 
     private void OnTPBackCommand(IServerPlayer player, int groupId, CmdArgs args) {
@@ -86,5 +86,63 @@ public class Commands {
         else {
             Main.API.SendMessage(player, groupId, "That entity is not a boat.", EnumChatType.CommandError);
         }
+    }
+
+    private void OnForceGroupPlayerAsOP(IServerPlayer player, int groupId, CmdArgs args) {
+        string? playerName = null;
+        string? groupName = null;
+        while (args.Length > 0) {
+            string argFlag = args.PopWord();
+            switch (argFlag) {
+                case "-p":
+                    playerName = args.PopWord();
+                    break;
+                case "-g":
+                    groupName = args.PopWord();
+                    break;
+            }
+        }
+        if (playerName == null || groupName == null) {
+            Main.API.SendMessage(player, groupId, "You must specify a player's username and a group name. Correct usage: /forcegroupplayerasop -p USERNAME -g GROUPNAME", EnumChatType.CommandError);
+            return;
+        }
+
+        ServerMain server = Traverse.Create(player).Field("server").GetValue<ServerMain>();
+        ServerSystem[] serverSystems = Traverse.Create(server).Field("Systems").GetValue<ServerSystem[]>();
+        ServerySystemPlayerGroups playerGroups = serverSystems.OfType<ServerySystemPlayerGroups>().FirstOrDefault();
+
+        var getGroupIDFromNameMethod = AccessTools.Method(playerGroups.GetType(), "GetgroupId");
+        int forceGroupID = (int)getGroupIDFromNameMethod.Invoke(playerGroups, new object[] {
+            groupName
+        });
+        if (forceGroupID <= 0) {
+            Main.API.SendMessage(player, groupId, "That group name does not exist.", EnumChatType.CommandError);
+            return;
+        }
+
+        //PlayerGroup forceGroup = playerGroups.PlayerGroupsByUid[forceGroupID];
+
+        foreach (ServerPlayerData playerData in server.PlayerDataManager.PlayerDataByUid.Values) {
+            if (playerData.LastKnownPlayername != playerName)
+                continue;
+
+            EnumPlayerGroupMemberShip membership = playerGroups.GetGroupMemberShip(playerData.PlayerUID, forceGroupID).Level;
+            if (membership == EnumPlayerGroupMemberShip.None) {
+                Main.API.SendMessage(player, groupId, "That player is not a part of that group.", EnumChatType.CommandError);
+                return;
+            }
+            if (membership == EnumPlayerGroupMemberShip.Op || membership == EnumPlayerGroupMemberShip.Owner) {
+                Main.API.SendMessage(player, groupId, "That player is already an OP, or the owner.", EnumChatType.CommandError);
+                return;
+            }
+
+            playerData.PlayerGroupMemberShips[forceGroupID].Level = EnumPlayerGroupMemberShip.Op;
+            server.PlayerDataManager.playerDataDirty = true;
+
+            Main.API.SendMessage(player, groupId, "Successfully made " + playerName + " an OP of group " + groupName + "!", EnumChatType.CommandSuccess);
+            return;
+        }
+
+        Main.API.SendMessage(player, groupId, "Could not find player with username " + playerName + ".", EnumChatType.CommandError);
     }
 }
