@@ -14,7 +14,7 @@ public class Commands {
         Main.API.RegisterCommand("tpback", "Teleports you back to where you were before initiating a successful /tp command.", "", new ServerChatCommandDelegate(this.OnTPBackCommand), Privilege.tp);
         Main.API.RegisterCommand("tpentityid", "Teleports an entity by ID to your position.", "-e ENTITYID", new ServerChatCommandDelegate(this.OnTPEntityID), Privilege.tp);
         Main.API.RegisterCommand("tagboatcreator", "Tags a boat as being created by a certain player's username.", "-p USERNAME", new ServerChatCommandDelegate(this.OnTagBoatCreator), Privilege.ban);
-        Main.API.RegisterCommand("forcegroupplayerasop", "Forces a group to accept a player within the group to be OP.", "-p USERNAME -g GROUPNAME", new ServerChatCommandDelegate(this.OnForceGroupPlayerAsOP), Privilege.controlserver);
+        Main.API.RegisterCommand("forcegroupop", "Forces a group to accept a player within the group to be OP.", "-p USERNAME -g GROUPNAME", new ServerChatCommandDelegate(this.OnForceGroupOP), Privilege.controlserver);
     }
 
     private void OnTPBackCommand(IServerPlayer player, int groupId, CmdArgs args) {
@@ -88,7 +88,7 @@ public class Commands {
         }
     }
 
-    private void OnForceGroupPlayerAsOP(IServerPlayer player, int groupId, CmdArgs args) {
+    private void OnForceGroupOP(IServerPlayer player, int groupId, CmdArgs args) {
         string? playerName = null;
         string? groupName = null;
         while (args.Length > 0) {
@@ -103,7 +103,7 @@ public class Commands {
             }
         }
         if (playerName == null || groupName == null) {
-            Main.API.SendMessage(player, groupId, "You must specify a player's username and a group name. Correct usage: /forcegroupplayerasop -p USERNAME -g GROUPNAME", EnumChatType.CommandError);
+            Main.API.SendMessage(player, groupId, "You must specify a player's username and a group name. Correct usage: /forcegroupop -p USERNAME -g GROUPNAME", EnumChatType.CommandError);
             return;
         }
 
