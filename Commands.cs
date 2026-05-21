@@ -15,6 +15,7 @@ public class Commands {
         Main.API.RegisterCommand("tpentityid", "Teleports an entity by ID to your position.", "-e ENTITYID", new ServerChatCommandDelegate(this.OnTPEntityID), Privilege.tp);
         Main.API.RegisterCommand("tagboatcreator", "Tags a boat as being created by a certain player's username.", "-p USERNAME", new ServerChatCommandDelegate(this.OnTagBoatCreator), Privilege.ban);
         Main.API.RegisterCommand("forcegroupop", "Forces a group to accept a player within the group to be OP.", "-p USERNAME -g GROUPNAME", new ServerChatCommandDelegate(this.OnForceGroupOP), Privilege.controlserver);
+        Main.API.RegisterCommand("forcegroupowner", "Forces a group to accept a player within the group to be the new Owner.", "-p USERNAME -g GROUPNAME", new ServerChatCommandDelegate(this.OnForceGroupOwner), Privilege.controlserver);
     }
 
     private void OnTPBackCommand(IServerPlayer player, int groupId, CmdArgs args) {
@@ -88,7 +89,7 @@ public class Commands {
         }
     }
 
-    private void OnForceGroupOP(IServerPlayer player, int groupId, CmdArgs args) {
+    private void ForceGroupPlayerAction(IServerPlayer player, int groupId, CmdArgs args, Func<IServerPlayer, string, ServerySystemPlayerGroups, ServerPlayerData, int, ServerMain, PlayerGroup, string, bool> action) {
         string? playerName = null;
         string? groupName = null;
         while (args.Length > 0) {
@@ -120,29 +121,61 @@ public class Commands {
             return;
         }
 
-        //PlayerGroup forceGroup = playerGroups.PlayerGroupsByUid[forceGroupID];
+        PlayerGroup forceGroup = playerGroups.PlayerGroupsByUid[forceGroupID];
+        string ownerUID = forceGroup.OwnerUID;
 
         foreach (ServerPlayerData playerData in server.PlayerDataManager.PlayerDataByUid.Values) {
             if (playerData.LastKnownPlayername != playerName)
                 continue;
 
+            if (action(player, groupName, playerGroups, playerData, forceGroupID, server, forceGroup, ownerUID))
+                return;
+        }
+
+        Main.API.SendMessage(player, groupId, "Could not find player with username " + playerName + ".", EnumChatType.CommandError);
+    }
+    private void OnForceGroupOP(IServerPlayer player, int groupId, CmdArgs args) {
+        ForceGroupPlayerAction(player, groupId, args, (callingPlayer, groupName, playerGroups, playerData, forceGroupID, server, forceGroup, ownerUID) => {
             EnumPlayerGroupMemberShip membership = playerGroups.GetGroupMemberShip(playerData.PlayerUID, forceGroupID).Level;
             if (membership == EnumPlayerGroupMemberShip.None) {
-                Main.API.SendMessage(player, groupId, "That player is not a part of that group.", EnumChatType.CommandError);
-                return;
+                Main.API.SendMessage(callingPlayer, groupId, "That player is not a part of that group.", EnumChatType.CommandError);
+                return true;
             }
             if (membership == EnumPlayerGroupMemberShip.Op || membership == EnumPlayerGroupMemberShip.Owner) {
-                Main.API.SendMessage(player, groupId, "That player is already an OP, or the owner.", EnumChatType.CommandError);
-                return;
+                Main.API.SendMessage(callingPlayer, groupId, "That player is already an OP, or the owner.", EnumChatType.CommandError);
+                return true;
             }
 
             playerData.PlayerGroupMemberShips[forceGroupID].Level = EnumPlayerGroupMemberShip.Op;
             server.PlayerDataManager.playerDataDirty = true;
 
-            Main.API.SendMessage(player, groupId, "Successfully made " + playerName + " an OP of group " + groupName + "!", EnumChatType.CommandSuccess);
-            return;
-        }
+            Main.API.SendMessage(callingPlayer, groupId, "Successfully made " + playerData.LastKnownPlayername + " an OP of group " + groupName + "!", EnumChatType.CommandSuccess);
+            return true;
+        });
+    }
+    private void OnForceGroupOwner(IServerPlayer player, int groupId, CmdArgs args) {
+        ForceGroupPlayerAction(player, groupId, args, (callingPlayer, groupName, playerGroups, playerData, forceGroupID, server, forceGroup, ownerUID) => {
+            EnumPlayerGroupMemberShip membership = playerGroups.GetGroupMemberShip(playerData.PlayerUID, forceGroupID).Level;
+            if (membership == EnumPlayerGroupMemberShip.None) {
+                Main.API.SendMessage(callingPlayer, groupId, "That player is not a part of that group.", EnumChatType.CommandError);
+                return true;
+            }
+            if (membership == EnumPlayerGroupMemberShip.Owner) {
+                Main.API.SendMessage(callingPlayer, groupId, "That player is already the owner.", EnumChatType.CommandError);
+                return true;
+            }
 
-        Main.API.SendMessage(player, groupId, "Could not find player with username " + playerName + ".", EnumChatType.CommandError);
+            // Make new player the owner
+            playerData.PlayerGroupMemberShips[forceGroupID].Level = EnumPlayerGroupMemberShip.Owner;
+            forceGroup.OwnerUID = playerData.PlayerUID;
+
+            // Make old owner an OP
+            server.PlayerDataManager.PlayerDataByUid[ownerUID].PlayerGroupMemberShips[forceGroupID].Level = EnumPlayerGroupMemberShip.Op;
+
+            server.PlayerDataManager.playerDataDirty = true;
+
+            Main.API.SendMessage(callingPlayer, groupId, "Successfully made " + playerData.LastKnownPlayername + " owner of group " + groupName + "!", EnumChatType.CommandSuccess);
+            return true;
+        });
     }
 }
